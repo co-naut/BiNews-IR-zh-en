@@ -1,0 +1,3 @@
+[submodule "MUSE"]
+	path = MUSE
+	url = git@github.com:co-naut/CLIR-News_MUSE.git
