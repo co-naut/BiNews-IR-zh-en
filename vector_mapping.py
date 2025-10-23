@@ -1774,7 +1774,7 @@ class VectorMapper:
     def train(
         self,
         method: str = 'iterative',
-        n_refinement: int = 5,
+        n_refinement: int = 10,
         **kwargs
     ) -> 'VectorMapper':
         """

@@ -153,28 +153,15 @@ def save_word2vec_binary(kv, output_path):
 
     Args:
         kv: gensim.models.KeyedVectors instance
-        output_path: Path where to save (should end in .bin.gz)
+        output_path: Path where to save (should end in .bin)
     """
     logger.info(f"Saving to Word2Vec binary format: {output_path}")
 
     # Save as binary format with gzip compression
     # Note: gensim's save_word2vec_format doesn't directly support .gz,
     # so we'll save uncompressed first then compress
-    temp_path = output_path.replace('.gz', '')
-
     logger.info("  Writing uncompressed binary file...")
-    kv.save_word2vec_format(temp_path, binary=True)
-
-    logger.info("  Compressing with gzip...")
-    import gzip
-    import shutil
-
-    with open(temp_path, 'rb') as f_in:
-        with gzip.open(output_path, 'wb') as f_out:
-            shutil.copyfileobj(f_in, f_out)
-
-    # Remove temporary uncompressed file
-    os.remove(temp_path)
+    kv.save_word2vec_format(output_path, binary=True)
 
     file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
     logger.info(f"  Saved: {output_path} ({file_size_mb:.1f} MB)")
@@ -240,7 +227,7 @@ def main():
 
         # Generate output filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-        output_filename = f"zh-en-mapped-{timestamp}.bin.gz"
+        output_filename = f"zh-en-mapped-{timestamp}.bin"
         output_path = os.path.join(args.output_dir, output_filename)
 
         # Save combined embeddings
