@@ -1773,7 +1773,7 @@ class VectorMapper:
 
     def train(
         self,
-        method: str = 'procrustes',
+        method: str = 'iterative',
         n_refinement: int = 5,
         **kwargs
     ) -> 'VectorMapper':
