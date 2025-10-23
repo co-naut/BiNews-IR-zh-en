@@ -43,7 +43,8 @@ python -u align_embeddings.py \
     --zh-embeddings ../../../pretrained_word2vec/zh/sgns.merge.word.bz2 \
     --en-embeddings ../../../pretrained_word2vec/en/GoogleNews-vectors-negative300.bin.gz \
     --dictionary ../../../dictionaries/cedict_processed.txt \
-    --output-dir ../../../pretrained_word2vec \
+    --output-dir ../../../pretrained_word2vec/zh-aligned/merge-google \
+    --save-name sgns.merge.bin.gz \
     --normalize \
     --center
 
