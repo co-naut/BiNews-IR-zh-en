@@ -2,17 +2,19 @@
 
 #SBATCH --job-name=650project_vec-map
 
-#SBATCH --time=01:00:00
+#SBATCH --time=04:00:00
 
 #SBATCH --account=si650f25s001_class
 
-#SBATCH --partition=standard
+#SBATCH --partition=gpu
 
 #SBATCH --nodes=1
 
 #SBATCH --cpus-per-task=2
 
 #SBATCH --ntasks-per-node=1
+
+#SBATCH --gpus=1
 
 #SBATCH --mem=64g
 
@@ -35,4 +37,14 @@ cd ${BASE_PATH}
 
 # Force unbuffered output for real-time logging
 export PYTHONUNBUFFERED=1
-python -u ...
+
+# Run the alignment script with full vocabulary (no --max-vocab for production)
+python -u align_embeddings.py \
+    --zh-embeddings ../../../pretrained_word2vec/zh/sgns.merge.word.bz2 \
+    --en-embeddings ../../../pretrained_word2vec/en/GoogleNews-vectors-negative300.bin.gz \
+    --dictionary ../../../dictionaries/cedict_processed.txt \
+    --output-dir ../../../pretrained_word2vec \
+    --normalize \
+    --center
+
+echo "Job completed at $(date)"
