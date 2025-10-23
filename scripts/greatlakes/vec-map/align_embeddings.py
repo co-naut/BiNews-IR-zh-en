@@ -4,23 +4,30 @@ Cross-Lingual Word Embedding Alignment Script
 ==============================================
 
 Aligns Chinese word embeddings to English space using Procrustes analysis
-and exports a combined Word2Vec binary file containing both languages.
+and exports the aligned Chinese embeddings as a gzip-compressed Word2Vec binary file.
+
+The output is saved in a timestamped subdirectory within the specified output directory.
 
 Usage:
     python align_embeddings.py \
         --zh-embeddings ../../pretrained_word2vec/zh/sgns.merge.word.bz2 \
         --en-embeddings ../../pretrained_word2vec/en/GoogleNews-vectors-negative300.bin.gz \
         --dictionary ../../dictionaries/cedict_processed.txt \
-        --output-dir ../../pretrained_word2vec \
+        --output-dir ../../pretrained_word2vec/zh-aligned/merged-google \
         --max-vocab 50000
 
+Output:
+    Creates: {output-dir}/{timestamp}/sgns.merge.word.gz
+    Example: pretrained_word2vec/zh-aligned/merged-google/20251023-143022/sgns.merge.word.gz
+
 Author: SI650 Project Team
-Date: 2025-10-22
+Date: 2025-10-23
 """
 
 import argparse
 import sys
 import os
+import gzip
 from datetime import datetime
 from pathlib import Path
 import numpy as np
@@ -78,7 +85,14 @@ def parse_args():
         '--output-dir',
         type=str,
         required=True,
-        help='Directory where to save the aligned embeddings'
+        help='Base directory where to save aligned embeddings (a timestamped subdirectory will be created)'
+    )
+
+    parser.add_argument(
+        '--save-name',
+        type=str,
+        required=True,
+        help='The name you want to save the aligned embedding as.'
     )
 
     parser.add_argument(
@@ -105,44 +119,37 @@ def parse_args():
     return parser.parse_args()
 
 
-def create_combined_embeddings(mapper, embedding_dim):
+def create_aligned_chinese_embeddings(mapper, embedding_dim):
     """
-    Create a single KeyedVectors object containing both aligned Chinese and original English.
+    Create a KeyedVectors object containing only aligned Chinese embeddings.
 
     Args:
         mapper: Trained VectorMapper instance
         embedding_dim: Dimensionality of embeddings
 
     Returns:
-        gensim.models.KeyedVectors with combined vocabulary
+        gensim.models.KeyedVectors with aligned Chinese vocabulary
     """
-    logger.info("Creating combined embedding vocabulary...")
+    logger.info("Creating aligned Chinese embedding vocabulary...")
 
     # Get all words and vectors
-    combined_words = []
-    combined_vectors = []
+    aligned_words = []
+    aligned_vectors = []
 
     # Get embeddings from loaders
     zh_embeddings = mapper.zh_loader.get_embeddings()
-    en_embeddings = mapper.en_loader.get_embeddings()
 
-    # Add aligned Chinese embeddings
+    # Add aligned Chinese embeddings (without prefix)
     logger.info(f"  Adding {len(zh_embeddings)} aligned Chinese words...")
     for word in zh_embeddings:
         aligned_vec = mapper.get_aligned_vector(word, 'zh')
-        combined_words.append(f"zh:{word}")  # Prefix to distinguish language
-        combined_vectors.append(aligned_vec)
-
-    # Add original English embeddings
-    logger.info(f"  Adding {len(en_embeddings)} English words...")
-    for word in en_embeddings:
-        combined_words.append(f"en:{word}")  # Prefix to distinguish language
-        combined_vectors.append(en_embeddings[word])
+        aligned_words.append(word)  # No prefix - use original Chinese word
+        aligned_vectors.append(aligned_vec)
 
     # Create KeyedVectors
-    logger.info(f"  Total vocabulary: {len(combined_words)} words")
+    logger.info(f"  Total vocabulary: {len(aligned_words)} words")
     kv = KeyedVectors(vector_size=embedding_dim)
-    kv.add_vectors(combined_words, combined_vectors)
+    kv.add_vectors(aligned_words, aligned_vectors)
 
     return kv
 
@@ -153,15 +160,23 @@ def save_word2vec_binary(kv, output_path):
 
     Args:
         kv: gensim.models.KeyedVectors instance
-        output_path: Path where to save (should end in .bin)
+        output_path: Path where to save (should end in .gz)
     """
-    logger.info(f"Saving to Word2Vec binary format: {output_path}")
+    logger.info(f"Saving to gzip-compressed Word2Vec binary format: {output_path}")
 
-    # Save as binary format with gzip compression
-    # Note: gensim's save_word2vec_format doesn't directly support .gz,
-    # so we'll save uncompressed first then compress
+    # Save to temporary uncompressed file first
+    temp_path = output_path.replace('.gz', '')
     logger.info("  Writing uncompressed binary file...")
-    kv.save_word2vec_format(output_path, binary=True)
+    kv.save_word2vec_format(temp_path, binary=True)
+
+    # Compress with gzip
+    logger.info("  Compressing with gzip...")
+    with open(temp_path, 'rb') as f_in:
+        with gzip.open(output_path, 'wb') as f_out:
+            f_out.writelines(f_in)
+
+    # Remove temporary uncompressed file
+    os.remove(temp_path)
 
     file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
     logger.info(f"  Saved: {output_path} ({file_size_mb:.1f} MB)")
@@ -221,35 +236,41 @@ def main():
             center=args.center
         )
 
-        # Create combined embeddings
-        logger.info("\n[4/5] Creating combined vocabulary...")
-        combined_kv = create_combined_embeddings(mapper, embedding_dim)
+        # Create aligned Chinese embeddings
+        logger.info("\n[4/5] Creating aligned Chinese vocabulary...")
+        aligned_kv = create_aligned_chinese_embeddings(mapper, embedding_dim)
 
-        # Generate output filename with timestamp
+        # Generate timestamped subdirectory
         timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-        output_filename = f"zh-en-mapped-{timestamp}.bin"
-        output_path = os.path.join(args.output_dir, output_filename)
+        output_subdir = os.path.join(args.output_dir, timestamp)
+        os.makedirs(output_subdir, exist_ok=True)
+        logger.info(f"  Created output directory: {output_subdir}")
 
-        # Save combined embeddings
-        logger.info("\n[5/5] Saving combined embeddings...")
-        save_word2vec_binary(combined_kv, output_path)
+        # Generate output path
+        output_filename = args.save_name
+        output_path = os.path.join(output_subdir, output_filename)
+
+        # Save aligned Chinese embeddings
+        logger.info("\n[5/5] Saving aligned Chinese embeddings...")
+        save_word2vec_binary(aligned_kv, output_path)
 
         # Success summary
         logger.info("\n" + "=" * 70)
         logger.info("ALIGNMENT COMPLETED SUCCESSFULLY!")
         logger.info("=" * 70)
-        logger.info(f"Output file:     {output_path}")
-        logger.info(f"Total words:     {len(combined_kv)}")
-        logger.info(f"Chinese words:   {len(mapper.zh_loader.get_embeddings())} (aligned)")
-        logger.info(f"English words:   {len(mapper.en_loader.get_embeddings())}")
-        logger.info(f"Training pairs:  {len(mapper.zh_words)}")
+        logger.info(f"Output directory: {output_subdir}")
+        logger.info(f"Output file:      {output_filename}")
+        logger.info(f"Full path:        {output_path}")
+        logger.info(f"Chinese words:    {len(aligned_kv)} (aligned to English space)")
+        logger.info(f"Training pairs:   {len(mapper.zh_words)}")
+        logger.info(f"Embedding dim:    {embedding_dim}")
         logger.info("=" * 70)
 
         logger.info("\nTo load the aligned embeddings:")
         logger.info(f"  from gensim.models import KeyedVectors")
-        logger.info(f"  kv = KeyedVectors.load_word2vec_format('{output_filename}', binary=True)")
-        logger.info(f"  # Access Chinese word: kv['zh:猫']")
-        logger.info(f"  # Access English word: kv['en:cat']")
+        logger.info(f"  kv = KeyedVectors.load_word2vec_format('{output_path}', binary=True)")
+        logger.info(f"  # Access Chinese word: kv['猫']")
+        logger.info(f"  # Example: kv.most_similar('猫') finds words similar to 'cat' in shared space")
 
         return 0
 
