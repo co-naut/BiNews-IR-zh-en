@@ -5,6 +5,7 @@
 pretrained_word2vec
 .claude
 __pycache__
+reports
 
 # files
 *.memo.md
